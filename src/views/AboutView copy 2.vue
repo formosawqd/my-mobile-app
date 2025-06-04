@@ -4,7 +4,7 @@
     <van-pull-refresh
       v-model="refreshing"
       @refresh="onRefresh"
-      style="height: 30%; overflow: auto"
+      style="height: 90%; overflow: auto"
       ref="pullRefresh"
     >
       <a-table
@@ -92,7 +92,7 @@ export default {
       ],
       data: [],
       page: 1,
-      pageSize: 5,
+      pageSize: 10,
       total: ALL_MOCK.length,
       loading: false,
       loadingMore: false,

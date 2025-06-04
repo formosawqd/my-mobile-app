@@ -1,44 +1,45 @@
 <template>
   <div style="padding: 16px; height: 100%">
-    <!-- vant-pull-refresh 默认就是滚动容器，需撑满高度 -->
-    <van-pull-refresh
-      v-model="refreshing"
-      @refresh="onRefresh"
-      style="height: 30%; overflow: auto"
-      ref="pullRefresh"
-    >
-      <a-table
-        :columns="columns"
-        :data-source="data"
-        :pagination="false"
-        row-key="key"
-        :loading="loading"
-        @change="onTableChange"
-        :scroll="{ x: 1600 }"
-        style="min-width: 1600px"
+    <vue-pull-refresh @refresh="onRefresh" :is-refreshing="loading">
+      <div
+        ref="scrollContent"
+        class="table-scroll-content"
+        @scroll.passive="onScroll"
+        style="height: 90%; overflow-y: auto"
       >
-        <template slot="col1" slot-scope="text">
-          <span class="copyable" title="点击复制" @click="copyName(text)">
-            {{ text }}
-          </span>
-        </template>
+        <a-table
+          :columns="columns"
+          :data-source="data"
+          :pagination="false"
+          row-key="key"
+          :loading="loading"
+          @change="onTableChange"
+          :scroll="{ x: 1600 }"
+        >
+          <!-- 姓名列：点击即可复制 -->
+          <template slot="col1" slot-scope="text">
+            <span class="copyable" title="点击复制" @click="copyName(text)">
+              {{ text }}
+            </span>
+          </template>
 
-        <template #col10="{ text }">
-          <span>{{ formatDate(text) }}</span>
-        </template>
-      </a-table>
-      <div style="text-align: center; padding: 8px 0">
-        <a-spin v-if="loadingMore" />
-        <span v-else-if="finished">没有更多了</span>
+          <template #col10="{ text }">
+            <span>{{ formatDate(text) }}</span>
+          </template>
+        </a-table>
+        <div style="text-align: center; padding: 8px 0">
+          <a-spin v-if="loadingMore" />
+          <span v-else-if="finished">没有更多了</span>
+        </div>
       </div>
-    </van-pull-refresh>
+    </vue-pull-refresh>
   </div>
 </template>
 
 <script>
 import "ant-design-vue/dist/antd.css";
 import { Table, Spin, message } from "ant-design-vue";
-import { Toast } from "vant";
+import VuePullRefresh from "vue-pull-refresh";
 
 // 构造模拟数据
 const ALL_MOCK = [];
@@ -63,6 +64,7 @@ export default {
   components: {
     "a-table": Table,
     "a-spin": Spin,
+    "vue-pull-refresh": VuePullRefresh,
   },
   data() {
     return {
@@ -73,7 +75,7 @@ export default {
           key: "col1",
           sorter: true,
           scopedSlots: { customRender: "col1" },
-        },
+        }, // 增加slot
         { title: "年龄", dataIndex: "col2", key: "col2", sorter: true },
         { title: "性别", dataIndex: "col3", key: "col3" },
         { title: "电话", dataIndex: "col4", key: "col4" },
@@ -92,7 +94,7 @@ export default {
       ],
       data: [],
       page: 1,
-      pageSize: 5,
+      pageSize: 10,
       total: ALL_MOCK.length,
       loading: false,
       loadingMore: false,
@@ -101,24 +103,10 @@ export default {
         field: null,
         order: null,
       },
-      refreshing: false,
     };
   },
   mounted() {
     this.loadData(true);
-    // 监听滚动事件，实现上拉加载更多
-    this.$nextTick(() => {
-      const pr = this.$refs.pullRefresh;
-      if (pr && pr.$el) {
-        pr.$el.addEventListener("scroll", this.onScroll, { passive: true });
-      }
-    });
-  },
-  beforeDestroy() {
-    const pr = this.$refs.pullRefresh;
-    if (pr && pr.$el) {
-      pr.$el.removeEventListener("scroll", this.onScroll);
-    }
   },
   methods: {
     loadData(reset = false) {
@@ -129,9 +117,12 @@ export default {
       }
       this.loading = reset;
       this.loadingMore = !reset;
+
       setTimeout(
         () => {
+          // 全量copy
           let arr = ALL_MOCK.slice(0);
+          // 排序逻辑
           if (this.sorter.field && this.sorter.order) {
             arr.sort((a, b) => {
               let v1 = a[this.sorter.field];
@@ -145,7 +136,7 @@ export default {
               return 0;
             });
           }
-
+          // 分页
           const start = (this.page - 1) * this.pageSize;
           const end = Math.min(this.page * this.pageSize, this.total);
           const pageData = arr.slice(start, end);
@@ -157,19 +148,20 @@ export default {
           this.finished = this.data.length >= this.total;
           this.loading = false;
           this.loadingMore = false;
-          this.refreshing = false;
         },
         reset ? 800 : 1000
       );
     },
-    onRefresh() {
+    onRefresh(done) {
       this.loadData(true);
+      setTimeout(() => {
+        done();
+      }, 1000);
     },
-    onScroll(event) {
-      if (this.loading || this.loadingMore || this.finished || this.refreshing)
-        return;
-
-      const el = event.target;
+    onScroll() {
+      if (this.loading || this.loadingMore || this.finished) return;
+      const el = this.$refs.scrollContent;
+      if (!el) return;
       const threshold = 40;
       if (el.scrollTop + el.clientHeight + threshold >= el.scrollHeight) {
         this.page += 1;
@@ -177,8 +169,6 @@ export default {
       }
     },
     onTableChange(pagination, filters, sorter) {
-      console.log(111);
-
       if (!sorter.order) {
         this.sorter = { field: null, order: null };
       } else {
@@ -196,12 +186,14 @@ export default {
       ).padStart(2, "0")}`;
     },
     copyName(text) {
+      // 现代浏览器优先
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard
           .writeText(text)
-          .then(() => Toast.success("复制成功"))
-          .catch(() => Toast.error("复制失败"));
+          .then(() => message.success("复制成功"))
+          .catch(() => message.error("复制失败"));
       } else {
+        // 兼容旧浏览器
         const input = document.createElement("input");
         input.setAttribute("readonly", "readonly");
         input.value = text;
@@ -209,9 +201,9 @@ export default {
         input.select();
         try {
           if (document.execCommand("copy")) {
-            Toast.success("复制成功");
+            message.success("复制成功");
           } else {
-            Toast.error("复制失败");
+            message.error("复制失败");
           }
         } catch (e) {
           message.error("复制失败");
@@ -224,32 +216,32 @@ export default {
 </script>
 
 <style scoped>
-/* 表格滚动容器样式 */
-/* .table-scroll-content {
+.table-scroll-content {
   border: 1px solid #eee;
   border-radius: 5px;
   background: #fff;
-} */
-/* 表头和内容不换行并超出省略号 */
+}
+/* 表头和内容 不换行 并超出省略号 */
 ::v-deep .ant-table-thead > tr > th,
 ::v-deep .ant-table-tbody > tr > td {
   white-space: nowrap !important;
-  /* text-overflow: ellipsis; */
-  /* overflow: hidden;
+  text-overflow: ellipsis;
+  overflow: hidden;
   max-width: 160px;
-  min-width: 40px; */
+  min-width: 40px;
 }
-/* 文字左对齐 */
-/* ::v-deep .ant-table-thead > tr > th,
+/* 必须加text-align，否则部分内容左右贴边 */
+::v-deep .ant-table-thead > tr > th,
 ::v-deep .ant-table-tbody > tr > td {
   text-align: left;
   vertical-align: middle;
-} */
+}
 /* 横向滚动 */
-/* ::v-deep .ant-table-content {
+::v-deep .ant-table-content {
   overflow-x: auto !important;
-} */
-/* 可复制cell样式 */
+}
+
+/* 可复制cell的样式 */
 .copyable {
   color: #1890ff;
   cursor: pointer;
