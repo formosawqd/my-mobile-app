@@ -1,11 +1,11 @@
 <template>
-  <div style="padding: 16px; height: 100%">
+  <div style="padding: 16px; height: calc(100% - 81px)">
     <vue-pull-refresh @refresh="onRefresh" :is-refreshing="loading">
       <div
         ref="scrollContent"
         class="table-scroll-content"
         @scroll.passive="onScroll"
-        style="height: 90%; overflow-y: auto"
+        style="height: 90%; overflow: auto"
       >
         <a-table
           :columns="columns"
@@ -14,7 +14,7 @@
           row-key="key"
           :loading="loading"
           @change="onTableChange"
-          :scroll="{ x: 1600 }"
+          :scroll="{ x: 1600, y: 500 }"
         >
           <!-- 姓名列：点击即可复制 -->
           <template slot="col1" slot-scope="text">
